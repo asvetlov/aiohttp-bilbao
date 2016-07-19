@@ -1,7 +1,7 @@
-# aiohttp-florence-2016
-Slides for Italian PyCon 2016
+# aiohttp-bilbao-2016
+Slides for EuroPython 2016
 
 
-Open http://asvetlov.github.io/aiohttp-florence/
+Open http://asvetlov.github.io/aiohttp-bilbao/
 
 
