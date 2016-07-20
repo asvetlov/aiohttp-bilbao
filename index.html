@@ -372,7 +372,7 @@ await fetch_all(urls, loop=loop)
                   <h2>Utilize keep-alives</h2>
                   <pre>
                     <code>
-async def fetch_all(*, loop):
+async def fetch_all(urls, *, loop):
     tasks = []
     async with aiohttp.ClientSession(loop=loop):
         for url in urls:
@@ -396,7 +396,7 @@ class Test(unittest.TestCase):
 
     def test_func(self):
         async def go():
-            self.assertEqual(1, await func(loop=loop))
+            self.assertEqual(1, await func(loop=self.loop))
 
         self.loop.run_until_complete(go())
                     </code>
