@@ -100,7 +100,6 @@ import requests
 r = requests.get('https://api.github.com/user',
                  auth=('user', 'pass'))
 print(r.status_code)
-print(r.headers['content-type'])
 print(r.text)
                   </code></pre>
                 </section>
@@ -290,38 +289,180 @@ async def handler(request):
                     </code>
                   </pre>
                 </section>
+              </section>
+              <section>
                 <section>
-                  <h2>Database init</h2>
+                  <h1>tips and tricks</h1>
+                </section>
+                <section>
+                  <h2>Development cycle</h2>
+                  <p>
+                    <ul>
+                      <li>Use single process for dev environment</li>
+                      <li>Make test run easy</li>
+                      <li>Deploy separately in different
+                        processes/containers/nodes</li>
+                    </ul>
+                  </p>
+                </section>
+                <section>
+                  <h2>Say NO to celery</h2>
                   <pre>
-                    <code>
-import sqlalchemy as sa
-from aiopg.sa import create_engine
+                    <code class="python">
+async def long_running_operation():
+    ...
 
-metadata = sa.MetaData()
-tbl = sa.Table('tbl', metadata,
-               sa.Column('id', sa.Integer, primary_key=True),
-               sa.Column('val', sa.String(255)))
-app['db'] = await create_engine(...)
-
-async def close_db(app):
-    app['db'].close()
-    await app['db'].wait_closed()
-app.on_cleanup.append(close_db)
+loop.create_task(long_running_operation())
                     </code>
                   </pre>
                 </section>
                 <section>
-                  <h2>Database usage</h2>
+                  <h2>Debug mode: problem</h2>
                   <pre>
                     <code>
-async def handler(request):
-    txt = ""
-    async with request.app['db'].acquire() as conn:
-        await conn.execute(tbl.insert().values(val='abc'))
+async def f():
+    fut = asyncio.Future()
+    fut.set_exception(RuntimeError())
+    del fut
+                    </code>
+                  </pre>
+                  <pre>
+                    <code>
+...
+ERROR:asyncio:Future exception was never retrieved
+future: Future finished exception=RuntimeError()
+RuntimeError
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>PYTHONASYNCIODEBUG=1</h2>
+                  <pre>
+                    <code class="bash">
+$ PYTHONASYNCIODEBUG=x python myapp.py
+                    </code>
+                  </pre>
+                  <pre>
+                    <code>
+ERROR:asyncio:Future exception was never retrieved
+future: Future finished exception=RuntimeError() created at filename.py:10
+source_traceback: Object created at (most recent call last):
+...
+File "filename.py", line 10, in f
+fut = asyncio.Future()
+RuntimeError
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>Explicit loop</h2>
+                  <pre>
+                    <code>
+async def fetch_all(urls, *, loop):
+    async with aiohttp.ClientSession(loop=loop):
+        ...
 
-        async for row in conn.execute(tbl.select()):
-            txt += "{}: {}\n".format(row.id, row.val)
-    return web.Response(text=txt)
+loop = asyncio.get_event_loop()
+asyncio.set_event_loop(None)  # !!!
+await fetch_all(urls, loop=loop)
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>Utilize keep-alives</h2>
+                  <pre>
+                    <code>
+async def fetch_all(*, loop):
+    tasks = []
+    async with aiohttp.ClientSession(loop=loop):
+        for url in urls:
+            tasks.append(loop.create_task(fetch(url), loop=loop))
+        await asyncio.wait(tasks, loop=loop)
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>Testing</h2>
+                  <pre>
+                    <code>
+class Test(unittest.TestCase):
+
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(None)
+
+    def tearDown(self):
+        self.loop.close()
+
+    def test_func(self):
+        async def go():
+            self.assertEqual(1, await func(loop=loop))
+
+        self.loop.run_until_complete(go())
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>Testing with pytest-aiohttp</h2>
+                  <pre>
+                    <code>
+def create_app(loop, path, handler):
+    app = web.Application(loop=loop)
+    app.router.add_route('GET', path, handler)
+    return app
+
+async def test_hello(test_client):
+    async def hello(request):
+        return web.Response(body=b'Hello, world')
+    client = await test_client(create_app, '/', handler)
+
+    resp = await client.get('/')
+    assert resp.status == 200
+    text = await resp.text()
+    assert 'Hello, world' in text
+                    </code>
+                  </pre>
+                </section>
+                <section>
+                  <h2>No global objects!!!</h2>
+                  <pre><code>
+from motor.motor_asyncio import AsyncIOMotorClient
+DBNAME = 'testdb'
+db = AsyncIOMotorClient()[DBNAME]
+
+async def register(request):
+    post_data = await request.post()
+    login, password = post_data['login'], post_data['password']
+    matches = await db.users.find({'login': login}).count()
+    ...
+                  </code></pre>
+                </section>
+                <section>
+                  <h2>Application as a storage</h2>
+                  <pre><code>
+async def register(request):
+    post_data = await request.post()
+    login, password = post_data['login'], post_data['password']
+    matches = await request.app['db'].users.find({'login': login}).count()
+    ...
+                  </code></pre>
+                </section>
+                <section>
+                  <h2>DB init and shutdown</h2>
+                  <pre>
+                    <code>
+def make_app(loop=None):
+    app = web.Application(loop=loop)
+    mongo = AsyncIOMotorClient(io_loop=loop)
+    db = mongo['testdb']
+    app['db'] = db
+
+    async def cleanup(app):
+        mongo.close()
+
+    app.on_cleanup.append(cleanup)
+    ...
+    return app
                     </code>
                   </pre>
                 </section>
@@ -350,95 +491,6 @@ async def hander(request):
                 <section>
                   <h2>Debug Toolbar</h2>
                   <img src="debugtoolbar.jpg"/>
-                </section>
-              </section>
-              <section>
-                <section>
-                  <h1>tips and tricks</h1>
-                </section>
-                <section>
-                  <h2>Development cycle</h2>
-                  <p>
-                    <ul>
-                      <li>Use single process for dev environment</li>
-                      <li>Make test run easy</li>
-                      <li>Deploy separately on different
-                        processes/containers/nodes</li>
-                    </ul>
-                  </p>
-                </section>
-                <section>
-                  <h2>PYTHONASYNCIODEBUG=1</h2>
-                  <pre>
-                    <code>
-async def f():
-    fut = asyncio.Future()
-    fut.set_exception(RuntimeError())
-    del fut
-                    </code>
-                  </pre>
-                  <pre>
-                    <code>
-...
-ERROR:asyncio:Future exception was never retrieved
-future: Future finished exception=RuntimeError()
-RuntimeError
-                    </code>
-                  </pre>
-                </section>
-                <section>
-                  <pre>
-                    <code class="bash">
-$ PYTHONASYNCIODEBUG=x python myapp.py
-                    </code>
-                  </pre>
-                  <pre>
-                    <code>
-ERROR:asyncio:Future exception was never retrieved
-future: Future finished exception=RuntimeError() created at filename.py:10
-source_traceback: Object created at (most recent call last):
-...
-File "filename.py", line 10, in f
-fut = asyncio.Future()
-RuntimeError
-                    </code>
-                  </pre>
-                </section>
-                <section>
-                  <h2>Explicit loop</h2>
-                  <pre>
-                    <code>
-def request(method, url, *, loop=None):
-    ...
-
-loop = asyncio.get_event_loop()
-await request('GET', 'http://python.org', loop=loop)
-                    </code>
-                  </pre>
-                </section>
-                <section>
-                  <h2>Testing</h2>
-                  <pre>
-                    <code>
-class Test(unittest.TestCase):
-
-    def setUp(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(None)
-
-    def tearDown(self):
-        self.loop.close()
-
-    def test_func(self):
-        async def go():
-            self.assertEqual(1, await func(loop=loop))
-
-        self.loop.run_until_complete(go())
-                    </code>
-                  </pre>
-                </section>
-                <section>
-global state and mongo client                  
                 </section>
               </section>
               <section>
