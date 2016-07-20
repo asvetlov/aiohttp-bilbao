@@ -120,6 +120,7 @@ print(r.headers['content-type'])
 print(r.text)
                   </code></pre>
                   <h3 class="fragment">Think about Keep-Alives</h3>
+                  <h4 class="fragment">and cookies</h4>
                 </section>
                 <section>
                   <h2>aiohttp with session</h2>
@@ -147,6 +148,9 @@ async def coro():
                     <code>
 async def func():
     await asyncio.sleep(1)
+
+async def other():
+    await func()
                     </code>
                   </pre>
                 </section>
