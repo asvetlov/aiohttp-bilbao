@@ -169,16 +169,22 @@ res = await asyncio.gather(*tasks)
                   <table>
                     <tr>
                       <td>
-                        <img src="sync.png">
+                        <figure>
+                          <img src="sync.png">
+                          <figcaption>Sequential</figcaption>
+                        </figure>
                       </td>
                       <td>
-                        <img src="block.png">
+                        <figure>
+                          <img src="threaded.png">
+                          <figcaption>Threaded</figcaption>
+                        </figure>
                       </td>
                       <td>
-                        <img src="threaded.png">
-                      </td>
-                      <td>
-                        <img src="async.png">
+                        <figure>
+                          <img src="async.png">
+                          <figcaption>Async</figcaption>
+                        </figure>
                       </td>
                     </tr>
                   </table>
@@ -266,6 +272,25 @@ tornado.ioloop.IOLoop.current().start()
                   </pre>
                 </section>
                 <section>
+                  <h2>Serverside websockets</h2>
+                  <pre>
+                    <code>
+async def handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    async for msg in ws:
+        if msg.data == 'close':
+            await ws.close()
+            break
+    else:
+        ws.send_str(msg.data + '/answer')
+
+    return ws
+                    </code>
+                  </pre>
+                </section>
+                <section>
                   <h2>Database init</h2>
                   <pre>
                     <code>
@@ -300,25 +325,6 @@ async def handler(request):
                     </code>
                   </pre>
                 </section>
-                <section>
-                  <h2>Serverside websockets</h2>
-                  <pre>
-                    <code>
-async def handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    async for msg in ws:
-        if msg.data == 'close':
-            await ws.close()
-            break
-    else:
-        ws.send_str(msg.data + '/answer')
-
-    return ws
-                    </code>
-                  </pre>
-                </section>
               </section>
               <section>
                 <section>
@@ -344,62 +350,6 @@ async def hander(request):
                 <section>
                   <h2>Debug Toolbar</h2>
                   <img src="debugtoolbar.jpg"/>
-                </section>
-              </section>
-              <section>
-                <section>
-                  <h2>asyncio under the hood</h2>
-                </section>
-                <section>
-                  <h2>Selector</h2>
-                  <p><b>EVENT_READ</b>/<b>EVENT_WRITE</b></p>
-                  <p>
-                    <ul>
-                      <li>register(fd, events, data=None)</li>
-                      <li>unregister(fd)</li>
-                      <li>select(timeout=None)</li>
-                    </ul>
-                  </p>
-                  <p class="fragment">
-                    <b><i>select, poll, epoll, kqueue</i></b>
-                  </p>
-                </section>
-                <section>
-                  <h2>Event loop</h2>
-                  <ul>
-                    <li>add_reader(fd, callback, *args)</li>
-                    <li>remove_reader(fd)</li>
-                    <li>add_writer(fd, callback, *args)</li>
-                    <li>remove_writer(fd)</li>
-                    <br/>
-                    <li>call_soon(callback, *args)</li>
-                    <li>call_later(delay, callback, *args)</li>
-                  </ul>
-                </section>
-                <section>
-                  <h2>event loop iteration</h2>
-                  <pre>
-                    <code>
-def run_forever():
-    while True:
-        events = selector.select(timeout)
-        for key, mask in events:
-            if mask & EVENT_READ:
-                key.reader(key.fileobj)
-            if mask & EVENT_WRITE:
-                key.writer(key.fileobj)
-        for timer in ready:
-            timer.run()
-                    </code>
-                  </pre>
-                </section>
-                <section>
-                  <h2>socket buffers</h2>
-                  <img src="buffers.png"/>
-                </section>
-                <section>
-                  <h2>timers</h2>
-                  <img src="timeline.png"/>
                 </section>
               </section>
               <section>
@@ -488,10 +438,7 @@ class Test(unittest.TestCase):
                   </pre>
                 </section>
                 <section>
-                  <h2>Performance</h2>
-                  <p>Benchmark numbers are equal to Tornado and Twisted</p>
-                  <p>Good enough for highload</p>
-                  <p>Support billions online users etc.</p>
+global state and mongo client                  
                 </section>
               </section>
               <section>
